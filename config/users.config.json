@@ -1,0 +1,7 @@
+{
+  "users": [
+    {"id": "u1", "name": "Alice", "email": "alice@example.com", "role": "admin", "config": {}},
+    {"id": "u2", "name": "Bob", "email": "bob@example.com", "role": "super_user", "config": {}},
+    {"id": "u3", "name": "Carol", "email": "carol@example.com", "role": "user", "config": {}}
+  ]
+}

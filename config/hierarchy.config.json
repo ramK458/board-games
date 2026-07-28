@@ -1,0 +1,9 @@
+{
+  "workspace": "Demo Workspace",
+  "levels": [
+    {"name": "Project", "sort_order": 1, "parent": null},
+    {"name": "Module",  "sort_order": 2, "parent": "Project"},
+    {"name": "Feature", "sort_order": 3, "parent": "Module"}
+  ],
+  "task_level": "Feature"
+}

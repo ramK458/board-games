@@ -1,0 +1,12 @@
+{
+  "level_permissions": {
+    "Project": {"view": ["admin", "super_user"], "edit": ["admin"]},
+    "Module":  {"view": ["admin", "super_user", "user"], "edit": ["admin", "super_user"]},
+    "Feature": {"view": ["admin", "super_user", "user"], "edit": ["admin", "super_user", "user"]}
+  },
+  "assignee_pools": {
+    "Project": ["u1"],
+    "Module":  ["u1", "u2"],
+    "Feature": ["u1", "u2", "u3"]
+  }
+}

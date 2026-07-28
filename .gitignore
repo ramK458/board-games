@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Board Games project
+_db/
+*.db
+*.sqlite3
+node_modules/

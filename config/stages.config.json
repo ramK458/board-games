@@ -1,0 +1,10 @@
+{
+  "default_stages": [
+    {"stage_name": "Planning", "sort_order": 0, "color_hex": "#6b7280"},
+    {"stage_name": "Not Started", "sort_order": 1, "color_hex": "#9ca3af"},
+    {"stage_name": "In Progress", "sort_order": 2, "color_hex": "#3b82f6"},
+    {"stage_name": "In Review", "sort_order": 3, "color_hex": "#f59e0b"},
+    {"stage_name": "Delayed", "sort_order": 4, "color_hex": "#ef4444"},
+    {"stage_name": "Completed", "sort_order": 5, "color_hex": "#10b981"}
+  ]
+}

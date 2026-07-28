@@ -1,0 +1,6 @@
+{
+  "providers": [
+    {"provider": "github", "api_base_url": "https://api.github.com", "rate_limit_rph": 5000, "enabled": false},
+    {"provider": "gitlab", "api_base_url": "https://gitlab.com/api/v4", "rate_limit_rph": 2000, "enabled": false}
+  ]
+}
