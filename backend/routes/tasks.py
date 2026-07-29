@@ -321,13 +321,21 @@ async def update_task(
     if effective_stage_id is not None:
         updates["stage_id"] = effective_stage_id
 
+    # Fields that should be included even when set to None (to allow clearing)
+    nullable_fields = {"assignee_id", "stage_id", "start_date", "end_date", "deadline", "days_to_complete"}
+
     for field in (
         "title", "description", "priority", "start_date", "end_date",
         "deadline", "parent_node_id", "assignee_id", "task_type",
         "days_to_complete",
     ):
         val = getattr(body, field, None)
-        if val is not None:
+        # Include explicitly-set None values for nullable fields (e.g. clearing assignee)
+        if field in nullable_fields:
+            # Check if the field was explicitly provided in the request body
+            if field in body.model_fields_set:
+                updates[field] = val
+        elif val is not None:
             updates[field] = val
 
     # ── Sync days_to_complete ↔ end_date ──

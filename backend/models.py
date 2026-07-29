@@ -218,7 +218,6 @@ class StageUpdate(BaseModel):
     sort_order: Optional[int] = None
     color_hex: Optional[str] = None
     active: Optional[bool] = None
-    color_hex: Optional[str] = None
 
 
 class StageReorderItem(BaseModel):
