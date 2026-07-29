@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Save, X, Clock, User, Calendar, Tag, Plus, Link, AlertCircle, ChevronDown } from 'lucide-react';
 import { useTaskStore } from '../../stores/taskStore';
 import { useNotificationStore } from '../../stores/notificationStore';
-import { commentApi, referenceApi, stageApi, hierarchyApi } from '../../api/client';
+import { commentApi, referenceApi, stageApi, hierarchyApi, taskApi } from '../../api/client';
 import type { Task, Comment, CrossReference, TaskStage, TaskUpdate, User as AppUser } from '../../types';
 
 interface Props {
@@ -24,6 +24,7 @@ export default function TaskDetailView({ taskId }: Props) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [daysRequired, setDaysRequired] = useState<number | null>(null);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
   const [taskType, setTaskType] = useState<Task['task_type']>('open_closure');
   const [newTagName, setNewTagName] = useState('');
@@ -36,6 +37,15 @@ export default function TaskDetailView({ taskId }: Props) {
   const [newComment, setNewComment] = useState('');
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [projectTags, setProjectTags] = useState<{ name: string; color_hex: string }[]>([]);
+
+  // Fetch change history when task changes or history is opened
+  useEffect(() => {
+    if (!task || !showHistory) return;
+    taskApi.history(task.id).then(setHistory).catch(() => {});
+  }, [task?.id, showHistory]);
 
   // Initialise local state when task loads
   useEffect(() => {
@@ -48,6 +58,7 @@ export default function TaskDetailView({ taskId }: Props) {
     setStartDate(task.start_date || '');
     setEndDate(task.end_date || '');
     setDeadline(task.deadline || '');
+    setDaysRequired(task.days_to_complete);
     setAssigneeId(task.assignee_id);
     setTaskType(task.task_type);
   }, [task?.id, task?.updated_at]);
@@ -61,6 +72,8 @@ export default function TaskDetailView({ taskId }: Props) {
   useEffect(() => {
     if (task?.parent_node_id) {
       stageApi.list(task.parent_node_id).then(setStages).catch(() => {});
+      fetch(`/api/projects/${task.parent_node_id}/tags`, { headers: { 'X-User-Id': '1' } })
+        .then(r => r.json()).then(setProjectTags).catch(() => {});
     }
   }, [task?.parent_node_id]);
 
@@ -93,6 +106,7 @@ export default function TaskDetailView({ taskId }: Props) {
       if (startDate !== (task.start_date || '')) updates.start_date = startDate || null;
       if (endDate !== (task.end_date || '')) updates.end_date = endDate || null;
       if (deadline !== (task.deadline || '')) updates.deadline = deadline || null;
+      if (daysRequired !== task.days_to_complete) updates.days_to_complete = daysRequired;
       if (assigneeId !== task.assignee_id) updates.assignee_id = assigneeId;
       if (taskType !== task.task_type) updates.task_type = taskType;
 
@@ -210,7 +224,7 @@ export default function TaskDetailView({ taskId }: Props) {
                 className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               >
                 <option value="">—</option>
-                {stages.map(s => (
+                {stages.filter(s => s.active !== 0).map(s => (
                   <option key={s.id} value={s.id}>{s.stage_name}</option>
                 ))}
               </select>
@@ -218,13 +232,22 @@ export default function TaskDetailView({ taskId }: Props) {
           </div>
 
           {/* Grid: Dates */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
               <input
                 type="date"
                 value={startDate}
-                onChange={e => { setStartDate(e.target.value); markDirty(); }}
+                onChange={e => {
+                  setStartDate(e.target.value);
+                  // If days_required is set, auto-update end_date
+                  if (daysRequired && e.target.value) {
+                    const s = new Date(e.target.value);
+                    s.setDate(s.getDate() + daysRequired - 1);
+                    setEndDate(s.toISOString().split('T')[0]);
+                  }
+                  markDirty();
+                }}
                 className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               />
             </div>
@@ -233,7 +256,38 @@ export default function TaskDetailView({ taskId }: Props) {
               <input
                 type="date"
                 value={endDate}
-                onChange={e => { setEndDate(e.target.value); markDirty(); }}
+                onChange={e => {
+                  setEndDate(e.target.value);
+                  // Derive days_required from start → end
+                  if (startDate && e.target.value) {
+                    const s = new Date(startDate);
+                    const e2 = new Date(e.target.value);
+                    const diff = Math.round((e2.getTime() - s.getTime()) / 86400000) + 1;
+                    setDaysRequired(diff > 0 ? diff : 1);
+                  }
+                  markDirty();
+                }}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Days Required</label>
+              <input
+                type="number"
+                min={1}
+                value={daysRequired ?? ''}
+                placeholder="—"
+                onChange={e => {
+                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                  setDaysRequired(val);
+                  // Auto-update end_date from start_date + days_required
+                  if (val && startDate) {
+                    const s = new Date(startDate);
+                    s.setDate(s.getDate() + val - 1);
+                    setEndDate(s.toISOString().split('T')[0]);
+                  }
+                  markDirty();
+                }}
                 className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               />
             </div>
@@ -307,7 +361,17 @@ export default function TaskDetailView({ taskId }: Props) {
                   style={{ backgroundColor: tag.color_hex + '20', color: tag.color_hex, border: `1px solid ${tag.color_hex}40` }}
                 >
                   {tag.tag_name}
-                  <X size={10} className="cursor-pointer hover:opacity-70" />
+                  <span
+                    onClick={async () => {
+                      try {
+                        await fetch(`/api/tasks/${taskId}/tags/${tag.id}`, { method: 'DELETE', headers: { 'X-User-Id': '1' } });
+                        loadTask(taskId);
+                      } catch {}
+                    }}
+                    className="cursor-pointer hover:opacity-70"
+                  >
+                    <X size={10} />
+                  </span>
                 </span>
               ))}
               {(!task.tags || task.tags.length === 0) && (
@@ -315,11 +379,35 @@ export default function TaskDetailView({ taskId }: Props) {
               )}
             </div>
             <div className="flex gap-2">
+              {/* Quick-add from project tags */}
+              {projectTags.length > 0 && (
+                <select
+                  value=""
+                  onChange={async e => {
+                    const pt = projectTags.find(t => t.name === e.target.value);
+                    if (!pt) return;
+                    try {
+                      await fetch(`/api/tasks/${taskId}/tags`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-User-Id': '1' },
+                        body: JSON.stringify({ tag_name: pt.name, color_hex: pt.color_hex }),
+                      });
+                      loadTask(taskId);
+                    } catch {}
+                  }}
+                  className="text-xs border rounded px-2 py-1 dark:bg-gray-800"
+                >
+                  <option value="">+ project tag...</option>
+                  {projectTags.map(pt => (
+                    <option key={pt.name} value={pt.name}>● {pt.name}</option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
                 value={newTagName}
                 onChange={e => setNewTagName(e.target.value)}
-                placeholder="Tag name"
+                placeholder="New tag..."
                 className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               />
               <input
@@ -452,6 +540,38 @@ export default function TaskDetailView({ taskId }: Props) {
             <button className="mt-2 text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
               <Plus size={10} /> Add reference
             </button>
+          </div>
+
+          {/* Change History */}
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase w-full text-left"
+            >
+              <ChevronDown size={12} className={`transition-transform ${showHistory ? 'rotate-0' : '-rotate-90'}`} />
+              Change History
+            </button>
+            {showHistory && (
+              <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                {history.length === 0 ? (
+                  <p className="text-xs text-gray-400">No changes recorded yet</p>
+                ) : (
+                  history.map((entry) => (
+                    <div key={entry.id} className="text-xs py-1 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                      <span className="font-medium">{entry.user_name || 'User #' + entry.changed_by}</span>
+                      {' '}
+                      changed <span className="font-mono text-blue-600">{entry.field_name}</span>
+                      {' '}
+                      {entry.old_value !== null ? (
+                        <span>from <span className="line-through text-red-500">{entry.old_value}</span></span>
+                      ) : 'set'}
+                      {' '}to <span className="text-green-600">{entry.new_value}</span>
+                      <span className="text-gray-400 ml-2">{new Date(entry.changed_at).toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

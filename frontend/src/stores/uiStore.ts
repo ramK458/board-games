@@ -9,6 +9,7 @@ interface UiState {
   searchQuery: string;
   filterStatus: string[];
   filterPriority: string[];
+  filterUserId: number | null;
 
   toggleSidebar: () => void;
   setView: (view: ViewType) => void;
@@ -16,6 +17,7 @@ interface UiState {
   setSearchQuery: (q: string) => void;
   setFilterStatus: (s: string[]) => void;
   setFilterPriority: (p: string[]) => void;
+  setFilterUser: (id: number | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -25,6 +27,7 @@ export const useUiStore = create<UiState>((set) => ({
   searchQuery: '',
   filterStatus: [],
   filterPriority: [],
+  filterUserId: null,
 
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
   setView: (view) => set({ currentView: view }),
@@ -36,4 +39,5 @@ export const useUiStore = create<UiState>((set) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
   setFilterStatus: (s) => set({ filterStatus: s }),
   setFilterPriority: (p) => set({ filterPriority: p }),
+  setFilterUser: (id) => set({ filterUserId: id }),
 }));

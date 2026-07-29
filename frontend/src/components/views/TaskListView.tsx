@@ -29,13 +29,16 @@ export default function TaskListView({ nodeId }: Props) {
   const loadTasks = useTaskStore(s => s.loadTasks);
   const openTab = useTabStore(s => s.openTab);
   const searchQuery = useUiStore(s => s.searchQuery);
+  const filterUserId = useUiStore(s => s.filterUserId);
   const [nodeName, setNodeName] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
-    loadTasks({ scope: nodeId, per_page: 100 });
+    const params: Record<string, number> = { scope: nodeId, per_page: 100 };
+    if (filterUserId) params.assignee_id = filterUserId;
+    loadTasks(params);
     hierarchyApi.getNode(nodeId).then(n => setNodeName(n.name)).catch(() => {});
-  }, [nodeId]);
+  }, [nodeId, filterUserId]);
 
   const handleTaskClick = (taskId: number, title: string) => {
     openTab({ id: `task-${taskId}`, type: 'task', title, taskId });

@@ -270,13 +270,38 @@ async def get_task(
     return result
 
 
+@router.get("/tasks/{task_id}/history")
+async def task_history(
+    task_id: int,
+    user: dict[str, Any] = Depends(get_current_user_dep),
+):
+    """Return the change log for a task — who changed what and when."""
+    db = get_db()
+    rows = db.fetch_all(
+        """SELECT cl.id, cl.field_name, cl.old_value, cl.new_value,
+                  cl.changed_by, cl.changed_at, u.name as user_name
+           FROM task_change_log cl
+           LEFT JOIN users u ON u.id = cl.changed_by
+           WHERE cl.task_id = ?
+           ORDER BY cl.changed_at DESC""",
+        (task_id,)
+    )
+    return [dict(r) for r in rows]
+
+
 @router.put("/tasks/{task_id}")
 async def update_task(
     task_id: int,
     body: TaskUpdate,
+    stage_id: Optional[int] = Query(None, description="Move task to a different stage"),
     user: dict[str, Any] = Depends(get_current_user_dep),
 ):
     """Update a task. Partial update — only send changed fields.
+
+    Supports ``?stage_id=newStage`` as a query parameter for quick
+    stage reassignment (e.g. from Kanban drag-drop).  When provided,
+    the query parameter takes precedence over any ``stage_id`` in the
+    request body.
 
     Approval flow: if ``task_type=approval_required`` and the assignee
     tries to set ``status=complete``, the endpoint sets ``pending_approval=1``
@@ -290,13 +315,74 @@ async def update_task(
 
     # Build updates dict from non-None fields
     updates: dict[str, Any] = {}
+
+    # Query-param stage_id takes precedence over body
+    effective_stage_id = stage_id if stage_id is not None else body.stage_id
+    if effective_stage_id is not None:
+        updates["stage_id"] = effective_stage_id
+
     for field in (
         "title", "description", "priority", "start_date", "end_date",
-        "deadline", "parent_node_id", "assignee_id", "task_type", "stage_id",
+        "deadline", "parent_node_id", "assignee_id", "task_type",
+        "days_to_complete",
     ):
         val = getattr(body, field, None)
         if val is not None:
             updates[field] = val
+
+    # ── Sync days_to_complete ↔ end_date ──
+    # Rules:
+    #   • If end_date is being set (not via auto-compute) → derive days_to_complete
+    #   • If days_to_complete is being set (not via auto-compute) → derive end_date
+    #   • If start_date changes and days_to_complete is known → re-derive end_date
+    #   • If both end_date and days_to_complete are sent, end_date wins
+    from datetime import datetime, timedelta
+
+    def _date_diff_days(start_s: str, end_s: str) -> int | None:
+        """Return whole calendar days between two ISO date strings, inclusive."""
+        try:
+            s = datetime.strptime(start_s, "%Y-%m-%d").date()
+            e = datetime.strptime(end_s, "%Y-%m-%d").date()
+            return (e - s).days + 1  # inclusive
+        except (ValueError, TypeError):
+            return None
+
+    def _add_days(date_s: str, days: int) -> str | None:
+        """Add *days* calendar days (inclusive) to an ISO date string."""
+        try:
+            d = datetime.strptime(date_s, "%Y-%m-%d").date()
+            return (d + timedelta(days=days - 1)).isoformat()
+        except (ValueError, TypeError):
+            return None
+
+    has_end = "end_date" in updates
+    has_dtc = "days_to_complete" in updates
+    has_start = "start_date" in updates
+
+    if has_end and not has_dtc:
+        # User set end_date → derive days_to_complete
+        start = updates.get("start_date") or (existing["start_date"] if not has_start else None)
+        if start:
+            updates["days_to_complete"] = _date_diff_days(start, updates["end_date"])
+
+    elif has_dtc and not has_end:
+        # User set days_to_complete → derive end_date
+        start = updates.get("start_date") or (existing["start_date"] if not has_start else None)
+        if start and updates["days_to_complete"] is not None:
+            updates["end_date"] = _add_days(start, updates["days_to_complete"])
+
+    elif has_start and not has_end and not has_dtc:
+        # start_date changed, days_to_complete already known → re-derive end_date
+        dtc = existing.get("days_to_complete")
+        if dtc is not None:
+            updates["end_date"] = _add_days(updates["start_date"], dtc)
+
+    # Validate stage_id if it's being changed
+        stage = db.fetch_one(
+            "SELECT id FROM task_stages WHERE id = ?", (updates["stage_id"],)
+        )
+        if stage is None:
+            raise HTTPException(status_code=404, detail="Stage not found")
 
     # Status change with approval flow
     if body.status is not None:
@@ -349,6 +435,20 @@ async def update_task(
 
     # Track who last edited this task
     updates["last_edited_by"] = user["id"]
+
+    # Log changed fields to task_change_log
+    try:
+        for field, new_val in list(updates.items()):
+            old_val = existing.get(field)
+            if str(old_val) != str(new_val):
+                db.execute(
+                    """INSERT INTO task_change_log (task_id, field_name, old_value, new_value, changed_by)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (task_id, field, str(old_val) if old_val is not None else None,
+                     str(new_val) if new_val is not None else None, user["id"])
+                )
+    except Exception:
+        pass  # Change log is non-critical — don't block the update
 
     db.update("tasks", updates, "id = ?", (task_id,))
 
@@ -409,17 +509,31 @@ async def add_tag(
         raise HTTPException(status_code=422, detail="tag_name is required")
 
     color_hex = body.get("color_hex", "#6366f1")
+    clean_name = tag_name.strip()
+
+    # Also register in project_tags for the task's project
+    project_id = task.get("parent_node_id")
+    if project_id:
+        existing_pt = db.fetch_one(
+            "SELECT id FROM project_tags WHERE project_id = ? AND name = ?",
+            (project_id, clean_name)
+        )
+        if not existing_pt:
+            try:
+                db.insert("project_tags", {"project_id": project_id, "name": clean_name, "color_hex": color_hex})
+            except Exception:
+                pass  # Non-critical — tag still works on the task
 
     try:
         tag_id = db.insert("task_tags", {
             "task_id": task_id,
-            "tag_name": tag_name.strip(),
+            "tag_name": clean_name,
             "color_hex": color_hex,
         })
     except Exception as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
-    return {"id": tag_id, "tag_name": tag_name.strip(), "color_hex": color_hex}
+    return {"id": tag_id, "tag_name": clean_name, "color_hex": color_hex}
 
 
 @router.delete("/tasks/{task_id}/tags/{tag_id}")

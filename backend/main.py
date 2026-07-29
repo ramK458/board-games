@@ -71,6 +71,7 @@ from backend.routes import (  # noqa: E402
     hierarchy,
     integration,
     references,
+    settings,
     stages,
     tasks,
     users,
@@ -81,6 +82,7 @@ app.include_router(comments.router, prefix="/api")
 app.include_router(hierarchy.router, prefix="/api")
 app.include_router(integration.router, prefix="/api")
 app.include_router(references.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 app.include_router(stages.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(users.router, prefix="/api")

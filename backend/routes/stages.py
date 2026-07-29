@@ -113,6 +113,11 @@ async def update_stage(
         updates["sort_order"] = body.sort_order
     if body.color_hex is not None:
         updates["color_hex"] = body.color_hex
+    if body.active is not None:
+        updates["active"] = 1 if body.active else 0
+        # If hiding, clear stage_id on affected tasks
+        if not body.active:
+            db.execute("UPDATE tasks SET stage_id = NULL WHERE stage_id = ?", (stage_id,))
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

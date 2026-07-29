@@ -31,8 +31,8 @@ def get_current_user(request: Request) -> dict[str, Any]:
         except (ValueError, TypeError):
             pass
 
-    # Fallback to default user (id=1)
-    user = db.fetch_one("SELECT * FROM users WHERE id = 1")
+    # Fallback: grab any user from the database
+    user = db.fetch_one("SELECT * FROM users ORDER BY id LIMIT 1")
     if user:
         return user
 

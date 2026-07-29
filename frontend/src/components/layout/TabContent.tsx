@@ -6,6 +6,7 @@ import KanbanView from '../views/KanbanView';
 import GanttView from '../views/GanttView';
 import DependencyGraphView from '../views/DependencyGraphView';
 import ChartView from '../views/ChartView';
+import SettingsView from '../views/SettingsView';
 
 export default function TabContent() {
   const tabs = useTabStore(s => s.tabs);
@@ -37,6 +38,8 @@ export default function TabContent() {
         return <DependencyGraphView nodeId={activeTab.nodeId!} />;
       case 'charts':
         return <ChartView nodeId={activeTab.nodeId!} />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return <div className="text-gray-400">Unknown view type</div>;
     }

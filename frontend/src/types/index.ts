@@ -1,5 +1,10 @@
 // ── Hierarchy ──────────────────────────────────
 
+export interface Tag {
+  name: string;
+  color_hex: string;
+}
+
 export interface HierarchyLevel {
   id: number;
   name: string;
@@ -52,6 +57,7 @@ export interface Task {
   assignee_id: number | null;
   task_type: TaskType;
   stage_id: number | null;
+  days_to_complete: number | null;
   creator_id: number;
   created_at: string;
   updated_at: string;
@@ -71,6 +77,7 @@ export interface TaskCreate {
   assignee_id?: number | null;
   task_type?: TaskType;
   stage_id?: number | null;
+  days_to_complete?: number | null;
 }
 
 export interface TaskUpdate {
@@ -85,6 +92,7 @@ export interface TaskUpdate {
   assignee_id?: number | null;
   task_type?: TaskType;
   stage_id?: number | null;
+  days_to_complete?: number | null;
 }
 
 // ── Comments ──────────────────────────────────
@@ -129,13 +137,14 @@ export interface TaskStage {
   stage_name: string;
   sort_order: number;
   color_hex: string;
+  active: number;
 }
 
 export interface StageCreate {
   project_id: number;
   stage_name: string;
   sort_order: number;
-  color_hex?: string;
+  color_hex: string;
 }
 
 // ── Users ─────────────────────────────────────

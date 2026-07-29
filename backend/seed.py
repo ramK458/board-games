@@ -39,6 +39,21 @@ def _insert(db, table: str, data: dict) -> int:
 def seed() -> None:
     db = get_db()
 
+    # ── Check if already seeded ──
+    existing = db.fetch_one("SELECT COUNT(*) AS cnt FROM hierarchy_levels")
+    if existing and existing["cnt"] > 0:
+        # Delete all data in FK-safe order, then re-seed
+        tables = [
+            "task_change_log", "external_links", "access_control",
+            "cross_references", "comments", "task_tags", "tasks",
+            "task_stages", "hierarchy_nodes", "hierarchy_levels",
+            "provider_configs", "users",
+        ]
+        db.execute("PRAGMA foreign_keys = OFF")
+        for t in tables:
+            db.execute(f"DELETE FROM {t}")
+        db.execute("PRAGMA foreign_keys = ON")
+
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
 
@@ -133,6 +148,7 @@ def seed() -> None:
             stage_ids[pid][stg["stage_name"]] = sid
 
     s1 = stage_ids[proj1_id]
+    s2 = stage_ids[proj2_id]
 
     # ═══════════════════════════════════════════
     #  6. Modules under each project
@@ -167,6 +183,33 @@ def seed() -> None:
         "name": "Payments", "description": "In-app purchases and subscriptions",
         "super_user_id": alice_id,
     })
+
+    # ═══════════════════════════════════════════
+    #  6. Project-level configuration
+    # ═══════════════════════════════════════════
+    # Set hierarchy labels for each project
+    for pid in [proj1_id, proj2_id]:
+        db.update("hierarchy_nodes", {
+            "config": json.dumps({"hierarchy": {"depth": 3, "labels": ["Project", "Module", "Feature"]}})
+        }, "id = ?", (pid,))
+
+    # Insert per-project tags
+    project_tags_data = {
+        proj1_id: [
+            ("frontend", "#3b82f6"), ("backend", "#10b981"), ("design", "#f59e0b"),
+            ("animation", "#ec4899"), ("bug", "#ef4444"), ("feature", "#06b6d4"),
+            ("enhancement", "#14b8a6"), ("api", "#0891b2"), ("database", "#7c3aed"),
+            ("performance", "#f97316"), ("testing", "#84cc16"), ("deployment", "#0ea5e9"),
+        ],
+        proj2_id: [
+            ("mobile", "#8b5cf6"), ("auth", "#6366f1"), ("payment", "#059669"),
+            ("ui", "#d946ef"), ("api", "#0891b2"), ("security", "#dc2626"),
+            ("biometric", "#a855f7"), ("third-party", "#f59e0b"), ("compliance", "#84cc16"),
+        ],
+    }
+    for pid, tags in project_tags_data.items():
+        for name, color in tags:
+            _insert(db, "project_tags", {"project_id": pid, "name": name, "color_hex": color})
 
     # ═══════════════════════════════════════════
     #  7. Features under each module
@@ -238,6 +281,7 @@ def seed() -> None:
     two_weeks_fwd = (now + timedelta(days=14)).strftime("%Y-%m-%d")
     next_month = (now + timedelta(days=30)).strftime("%Y-%m-%d")
     two_months = (now + timedelta(days=60)).strftime("%Y-%m-%d")
+    three_months = (now + timedelta(days=90)).strftime("%Y-%m-%d")
     yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -258,38 +302,38 @@ def seed() -> None:
         # ── Website Redesign / Frontend / Search ──
         ("Implement search autocomplete", "Debounced search with suggestions dropdown", "not_done", "low", None, next_month, None, "search", carol_id, "Backlog", "open_closure"),
         ("Build search results page", "Paginated results with facet filters", "not_done", "medium", next_month, two_months, two_months, "search", bob_id, "Planning", "open_closure"),
-        ("Index all pages for search", "Background indexing job for all content", "not_done", "medium", None, two_months, None, "search", bob_id, "Planning", "open_closure"),
-        ("Optimize search SQL queries", "Add FTS5 and proper indexing for search", "not_done", "medium", None, next_month, None, "search", bob_id, "Planning", "open_closure"),
+        ("Index all pages for search", "Background indexing job for all content", "not_done", "medium", two_months, three_months, three_months, "search", bob_id, "Planning", "open_closure"),
+        ("Optimize search SQL queries", "Add FTS5 and proper indexing for search", "not_done", "medium", None, next_month, next_month, "search", bob_id, "Planning", "open_closure"),
 
         # ── Website Redesign / Backend / Auth API ──
         ("Build login API endpoint", "POST /api/auth/login with JWT tokens", "complete", "critical", month_ago, two_weeks, two_weeks, "api_auth", alice_id, "Completed", "open_closure"),
-        ("Build register API endpoint", "POST /api/auth/register with email verification", "in_progress", "high", two_weeks, next_week, next_week, "api_auth", bob_id, "In Progress", "approval_required"),
-        ("Add OAuth2 provider support", "Google and GitHub OAuth login flows", "not_done", "high", next_week, next_month, next_month, "api_auth", bob_id, "Not Started", "open_closure"),
-        ("Implement JWT refresh tokens", "Refresh token rotation with blacklist", "not_done", "medium", next_month, two_months, None, "api_auth", alice_id, "Planning", "open_closure"),
+        ("Build register API endpoint", "POST /api/auth/register with email verification", "in_progress", "high", two_weeks, next_week, two_weeks_fwd, "api_auth", bob_id, "In Progress", "approval_required"),
+        ("Add OAuth2 provider support", "Google and GitHub OAuth login flows", "not_done", "high", next_week, next_month, two_months, "api_auth", bob_id, "Not Started", "open_closure"),
+        ("Implement JWT refresh tokens", "Refresh token rotation with blacklist", "not_done", "medium", next_month, two_months, two_months, "api_auth", alice_id, "Planning", "open_closure"),
 
         # ── Website Redesign / Backend / CMS API ──
         ("Create CMS CRUD endpoints", "GET/POST/PUT/DELETE for pages and articles", "not_done", "medium", None, next_month, next_month, "cms_api", bob_id, "Not Started", "open_closure"),
-        ("Build CMS media upload", "Image/file upload with thumbnail generation", "not_done", "low", next_month, two_months, None, "cms_api", carol_id, "Backlog", "open_closure"),
-        ("Add CMS version history", "Track page revisions with diff view", "not_done", "low", None, two_months, None, "cms_api", bob_id, "Backlog", "open_closure"),
+        ("Build CMS media upload", "Image/file upload with thumbnail generation", "not_done", "low", next_month, two_months, two_months, "cms_api", carol_id, "Backlog", "open_closure"),
+        ("Add CMS version history", "Track page revisions with diff view", "not_done", "low", None, two_months, two_months, "cms_api", bob_id, "Backlog", "open_closure"),
 
         # ── Website Redesign / Design / Colors ──
         ("Define brand color tokens", "Primary, secondary, accent, neutral palette", "complete", "medium", month_ago, two_weeks, two_weeks, "colors", alice_id, "Completed", "open_closure"),
-        ("Create typography scale", "Type ramp from caption to display sizes", "complete", "medium", three_weeks, last_week, last_week, "colors", alice_id, "Completed", "open_closure"),
-        ("Build spacing system", "4px-grid-based spacing tokens for all components", "in_progress", "medium", last_week, next_week, next_week, "colors", alice_id, "In Review", "open_closure"),
+        ("Create typography scale", "Type ramp from caption to display sizes", "complete", "medium", two_weeks, last_week, two_weeks, "colors", alice_id, "Completed", "open_closure"),
+        ("Build spacing system", "4px-grid-based spacing tokens for all components", "in_progress", "medium", last_week, next_week, two_weeks_fwd, "colors", alice_id, "In Review", "open_closure"),
 
         # ── Website Redesign / Design / Components ──
-        ("Build Button component", "Primary, secondary, outline, ghost variants", "in_progress", "high", last_week, next_week, next_week, "components", carol_id, "In Review", "open_closure"),
-        ("Build Card component", "Image card, text card, interactive card", "not_done", "medium", next_week, two_weeks_fwd, two_weeks_fwd, "components", carol_id, "Not Started", "open_closure"),
-        ("Build Modal component", "Accessible modal with focus trap and animations", "not_done", "medium", two_weeks_fwd, next_month, None, "components", carol_id, "Planning", "open_closure"),
+        ("Build Button component", "Primary, secondary, outline, ghost variants", "in_progress", "high", last_week, next_week, two_weeks_fwd, "components", carol_id, "In Review", "open_closure"),
+        ("Build Card component", "Image card, text card, interactive card", "not_done", "medium", next_week, two_weeks_fwd, next_month, "components", carol_id, "Not Started", "open_closure"),
+        ("Build Modal component", "Accessible modal with focus trap and animations", "not_done", "medium", two_weeks_fwd, next_month, two_months, "components", carol_id, "Planning", "open_closure"),
         ("Build Form input components", "Text input, select, checkbox, radio, datepicker", "not_done", "high", next_month, two_months, two_months, "components", bob_id, "Planning", "open_closure"),
 
         # ── Mobile App / Auth / Login ──
-        ("Build login screen UI", "Email/password form with validation", "not_done", "critical", None, next_month, today, "login", bob_id, "In Progress", "open_closure"),
+        ("Build login screen UI", "Email/password form with validation", "not_done", "critical", last_week, tomorrow, today, "login", bob_id, "In Progress", "open_closure"),
         ("Build signup screen UI", "Registration form with terms acceptance", "not_done", "high", next_week, next_month, next_month, "login", carol_id, "Not Started", "open_closure"),
         ("Add password reset flow", "Forgot password screen with email link", "not_done", "medium", next_month, two_months, None, "login", carol_id, "Backlog", "open_closure"),
 
         # ── Mobile App / Auth / Biometric ──
-        ("Implement Face ID auth", "Biometric authentication for iOS/Android", "not_done", "high", None, next_month, None, "biometric", carol_id, "Backlog", "open_closure"),
+        ("Implement Face ID auth", "Biometric authentication for iOS/Android", "not_done", "high", next_week, next_month, None, "biometric", carol_id, "Backlog", "open_closure"),
         ("Build fingerprint login", "Touch ID / fingerprint sensor support", "not_done", "medium", None, two_months, None, "biometric", None, "Backlog", "open_closure"),
         ("Add biometric enrollment UI", "Onboarding screen to enroll biometrics", "not_done", "low", None, two_months, None, "biometric", None, "Backlog", "open_closure"),
 
@@ -301,16 +345,20 @@ def seed() -> None:
 
         # ── Mobile App / Payments / Subscriptions ──
         ("Subscription management screen", "View, upgrade, cancel subscription plans", "not_done", "medium", None, next_month, next_month, "subscriptions", carol_id, "Planning", "open_closure"),
-        ("Build plan comparison table", "Feature comparison across pricing tiers", "not_done", "medium", next_month, two_months, None, "subscriptions", carol_id, "Planning", "open_closure"),
-        ("Implement recurring billing", "Monthly/yearly auto-renewal logic", "not_done", "high", next_week, next_month, next_month, "subscriptions", bob_id, "Not Started", "open_closure"),
+        ("Build plan comparison table", "Feature comparison across pricing tiers", "not_done", "medium", next_month, two_months, two_months, "subscriptions", carol_id, "Planning", "open_closure"),
+        ("Implement recurring billing", "Monthly/yearly auto-renewal logic", "not_done", "high", next_week, next_month, two_months, "subscriptions", bob_id, "Not Started", "open_closure"),
     ]
+
+    # Which feature keys belong to Mobile App v2 (proj2_id)?
+    mobile_features: set[str] = {"login", "biometric", "checkout", "subscriptions"}
 
     task_ids: list[int] = []
     for title, desc, status, priority, start, end, deadline, feat_key, assignee, stage_name, task_type in tasks_data:
         feat_id = feat_ids.get(feat_key)
         if feat_id is None:
             continue
-        stage_id = s1.get(stage_name)
+        stage_map = s2 if feat_key in mobile_features else s1
+        stage_id = stage_map.get(stage_name)
         tid = _insert(db, "tasks", {
             "title": title,
             "description": desc,
@@ -394,6 +442,10 @@ def seed() -> None:
         (11, 8, "blocks", "Login needed for search admin panel"),
         (8, 11, "blocked_by", ""),
 
+        # CMS CRUD (None→next_month) also blocks search results (next_month→two_months) — converging edge test
+        (15, 8, "blocks", "CMS content model needed before search indexing"),
+        (8, 15, "blocked_by", ""),
+
         # Auth: login (month_ago→two_weeks) → register (two_weeks→next_week) → OAuth2 (next_week→next_month)
         (11, 12, "blocks", "Login before register"),
         (12, 11, "blocked_by", ""),
@@ -461,6 +513,35 @@ def seed() -> None:
             "rate_limit_rph": prov.get("rate_limit_rph", 5000),
             "enabled": 1 if prov.get("enabled", True) else 0,
         })
+
+    # ═══════════════════════════════════════════
+    #  13. Task Change Log (example edit history)
+    # ═══════════════════════════════════════════
+    # Simulate a few field changes on existing tasks
+    now = datetime.utcnow()
+    example_changes = [
+        # Task 0 (Hero redesign): started as not_done, moved to in_progress
+        (task_ids[0], "status",      "not_done",    "in_progress",  alice_id, (now - timedelta(days=5)).isoformat()),
+        (task_ids[0], "priority",    "medium",      "high",          alice_id, (now - timedelta(days=5)).isoformat()),
+        (task_ids[0], "assignee_id", None,          str(alice_id),   alice_id, (now - timedelta(days=4)).isoformat()),
+        # Task 0: title was refined
+        (task_ids[0], "title",       "Hero section redesign", "Redesign hero section with new brand", alice_id, (now - timedelta(days=3)).isoformat()),
+        # Task 11 (Login API): completed by Alice
+        (task_ids[11], "status",     "not_done",    "in_progress",  bob_id, (now - timedelta(days=6)).isoformat()),
+        (task_ids[11], "status",     "in_progress", "complete",     alice_id, (now - timedelta(days=2)).isoformat()),
+        # Task 18 (Design colors): deadline updated
+        (task_ids[18], "deadline",   None,          (now + timedelta(days=14)).strftime("%Y-%m-%d"), carol_id, (now - timedelta(days=3)).isoformat()),
+        # Task 25 (Login screen): description updated
+        (task_ids[25], "description","",            "Mobile login screen with biometric auth support", bob_id, (now - timedelta(days=4)).isoformat()),
+        # Task 31 (Checkout flow): priority bumped
+        (task_ids[31], "priority",   "medium",      "critical",     alice_id, (now - timedelta(days=1)).isoformat()),
+    ]
+    for tid, field, old, new, user_id, timestamp in example_changes:
+        db.execute(
+            """INSERT INTO task_change_log (task_id, field_name, old_value, new_value, changed_by, changed_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (tid, field, old, new, user_id, timestamp)
+        )
 
     print("✅ Demo workspace seeded with:")
     print(f"   - {len(level_map)} hierarchy levels")

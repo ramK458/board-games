@@ -52,6 +52,7 @@ class TaskCreate(BaseModel):
     assignee_id: Optional[int] = None
     task_type: str = "open_closure"
     stage_id: Optional[int] = None
+    days_to_complete: Optional[int] = None
 
     @field_validator("status")
     @classmethod
@@ -90,6 +91,7 @@ class TaskUpdate(BaseModel):
     assignee_id: Optional[int] = None
     task_type: Optional[str] = None
     stage_id: Optional[int] = None
+    days_to_complete: Optional[int] = None
 
     @field_validator("status")
     @classmethod
@@ -138,6 +140,7 @@ class TaskResponse(BaseModel):
     creator_id: int
     created_at: str
     updated_at: str
+    days_to_complete: Optional[int] = None
     tags: list[dict[str, Any]] = Field(default_factory=list)
     comments_count: int = 0
 
@@ -213,6 +216,8 @@ class StageCreate(BaseModel):
 class StageUpdate(BaseModel):
     stage_name: Optional[str] = None
     sort_order: Optional[int] = None
+    color_hex: Optional[str] = None
+    active: Optional[bool] = None
     color_hex: Optional[str] = None
 
 

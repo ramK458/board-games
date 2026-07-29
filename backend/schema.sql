@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS task_stages (
     project_id INTEGER NOT NULL REFERENCES hierarchy_nodes(id),
     stage_name TEXT    NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    color_hex  TEXT    DEFAULT '#6366f1'
+    color_hex  TEXT    DEFAULT '#6366f1',
+    active     INTEGER DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_stages_project
@@ -89,6 +90,7 @@ CREATE TABLE IF NOT EXISTS tasks (
                            CHECK(task_type IN ('open_closure','approval_required')),
     stage_id       INTEGER REFERENCES task_stages(id),
     creator_id     INTEGER REFERENCES users(id),
+    days_to_complete INTEGER,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -241,6 +243,34 @@ CREATE TABLE IF NOT EXISTS inbox (
     processed_at TIMESTAMP,
     status       TEXT    DEFAULT 'pending'
 );
+
+-- ── 15. Project Tags (per-project tag library) ─
+
+CREATE TABLE IF NOT EXISTS project_tags (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES hierarchy_nodes(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,
+    color_hex  TEXT    DEFAULT '#6366f1',
+    UNIQUE(project_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_tags_project
+    ON project_tags(project_id);
+
+-- ── 16. Task Change Log ──────────────────────
+
+CREATE TABLE IF NOT EXISTS task_change_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    field_name  TEXT    NOT NULL,
+    old_value   TEXT,
+    new_value   TEXT,
+    changed_by  INTEGER REFERENCES users(id),
+    changed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_change_log_task
+    ON task_change_log(task_id, changed_at);
 
 -- ── Triggers ──────────────────────────────────
 

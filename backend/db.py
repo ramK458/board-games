@@ -64,6 +64,9 @@ def init_db() -> None:
     )
     for t in tables:
         db.write(f"DELETE FROM {t}")
+    # Reset autoincrement counters so re-inserted rows get IDs starting from 1
+    if "sqlite_sequence" in tables:
+        db.write("DELETE FROM sqlite_sequence")
     db._connection.executescript("PRAGMA foreign_keys = ON;")
 
     # Run schema.sql via executescript (handles multi-statement DDL including triggers)
@@ -101,6 +104,18 @@ def init_db() -> None:
     try:
         db._connection.executescript(
             "ALTER TABLE tasks ADD COLUMN last_edited_by INTEGER REFERENCES users(id);"
+        )
+    except Exception:
+        pass
+    try:
+        db._connection.executescript(
+            "ALTER TABLE task_stages ADD COLUMN active INTEGER DEFAULT 1;"
+        )
+    except Exception:
+        pass
+    try:
+        db._connection.executescript(
+            "ALTER TABLE tasks ADD COLUMN days_to_complete INTEGER;"
         )
     except Exception:
         pass

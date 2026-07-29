@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export interface Tab {
   id: string;
-  type: 'task' | 'list' | 'kanban' | 'gantt' | 'graph' | 'charts';
+  type: 'task' | 'list' | 'kanban' | 'gantt' | 'graph' | 'charts' | 'settings',
   title: string;
   nodeId?: number;
   taskId?: number;

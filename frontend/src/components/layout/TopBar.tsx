@@ -36,6 +36,8 @@ export default function TopBar() {
   const toggleTheme = useUiStore(s => s.toggleTheme);
   const searchQuery = useUiStore(s => s.searchQuery);
   const setSearchQuery = useUiStore(s => s.setSearchQuery);
+  const filterUserId = useUiStore(s => s.filterUserId);
+  const setFilterUser = useUiStore(s => s.setFilterUser);
   const activeNodeId = useHierarchyStore(s => s.activeNodeId);
   const openTab = useTabStore(s => s.openTab);
 
@@ -102,26 +104,12 @@ export default function TopBar() {
 
   const handleConfigAction = (action: string) => {
     setShowSettings(false);
-    switch (action) {
-      case 'stages':
-        if (activeNodeId) {
-          setView('kanban');
-          const tabId = `kanban-${activeNodeId}`;
-          openTab({ id: tabId, type: 'kanban', title: 'Kanban — Stages', nodeId: activeNodeId });
-        } else {
-          addToast('info', 'Select a project from the sidebar first');
-        }
-        break;
-      case 'tags':
-        addToast('info', 'Tag library — edit labels and colors from the config/tag-library.config.json file');
-        break;
-      case 'hierarchy':
-        addToast('info', 'Hierarchy levels are configured in config/hierarchy.config.json');
-        break;
-      case 'permissions':
-        addToast('info', 'Permissions are configured in config/permissions.config.json');
-        break;
-    }
+    openTab({ id: 'settings', type: 'settings', title: 'Settings' });
+    import('../../stores/settingsStore').then(m => {
+      if (action === 'stages') m.useSettingsStore.getState().setActiveSubTab('stages');
+      else if (action === 'tags') m.useSettingsStore.getState().setActiveSubTab('tags');
+      else if (action === 'hierarchy') m.useSettingsStore.getState().setActiveSubTab('hierarchy');
+    });
   };
 
   return (
@@ -149,6 +137,20 @@ export default function TopBar() {
             {v.label}
           </button>
         ))}
+      </div>
+
+      {/* User filter */}
+      <div className="flex items-center gap-1">
+        <select
+          value={filterUserId ?? ''}
+          onChange={e => setFilterUser(e.target.value ? Number(e.target.value) : null)}
+          className="text-xs border border-gray-200 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+        >
+          <option value="">All Users</option>
+          {users.map(u => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Search */}

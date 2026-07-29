@@ -23,6 +23,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const hierarchyApi = {
   getLevels: () => request<HierarchyLevel[]>('/hierarchy/levels'),
+  listLevels: () => request<HierarchyLevel[]>('/hierarchy/levels'),
+  createLevel: (data: { name: string; parent_level_id?: number; sort_order?: number }) =>
+    request<HierarchyLevel>('/hierarchy/levels', { method: 'POST', body: JSON.stringify(data) }),
+  deleteLevel: (id: number) => request<void>(`/hierarchy/levels/${id}`, { method: 'DELETE' }),
   getNodes: (parentId?: number) =>
     request<HierarchyNode[]>(`/hierarchy/nodes${parentId ? `?parent_id=${parentId}` : ''}`),
   getNode: (id: number) => request<HierarchyNode>(`/hierarchy/nodes/${id}`),
@@ -45,11 +49,19 @@ export const taskApi = {
   },
   get: (id: number) => request<Task>(`/tasks/${id}`),
   create: (data: TaskCreate) => request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: TaskUpdate) =>
-    request<Task>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  update: (id: number, data: TaskUpdate, params?: Record<string, string | number>) => {
+    let path = `/tasks/${id}`;
+    if (params) {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => qs.set(k, String(v)));
+      path += `?${qs.toString()}`;
+    }
+    return request<Task>(path, { method: 'PUT', body: JSON.stringify(data) });
+  },
   delete: (id: number) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
   approve: (id: number) => request<Task>(`/tasks/${id}/approve`, { method: 'POST' }),
   reject: (id: number) => request<Task>(`/tasks/${id}/reject`, { method: 'POST' }),
+  history: (id: number) => request<any[]>(`/tasks/${id}/history`),
 };
 
 // ── Comments ──────────────────────────────────
